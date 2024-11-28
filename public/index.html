@@ -1,31 +1,241 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Play game 1</title>
-  <link rel="shortcut icon" href="<%= BASE_URL %>sword-icon.png" type="image/png">
-  <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/meyer-reset/2.0/reset.min.css'/>
-
-  <style type="text/css" scoped>
-    html {
-      height: 100%;
-      background-color: #655a5a;
-    }
-
-    body {
-      overflow: hidden;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Jeu Circulation</title>
+    <script src="lib/phaser.min.js"></script>
 </head>
-
 <body>
-  <div id="delaford"></div>
-</body>
+    <script>
+        var config = {
+            type: Phaser.AUTO,
+            width: 1350,
+            height: 770,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    //avec garvity tout tombe même les voitures
+                   // gravity: {y: 300},
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            },
+            audio: {
+                disableWebAudio: true
+            }
+        };
 
+        var game = new Phaser.Game(config);
+
+        //variable globale
+        let keys, velo, voitureRouge, voiture, pieton, eau1, eau2, layer, salut,salut1,salut2,salut3,salut4,salut5,score,scoreText;
+       
+       
+
+        function preload()
+        {
+            this.load.image ('velo', 'assets/smallVeloOrangeCrop.png');
+            this.load.image('voiture', 'assets/car.png');
+            this.load.image('voitureRouge', 'assets/redCar.png');
+            this.load.image('pneuMort', 'assets/pneuBadsvg.svg');
+            this.load.image('mort', 'assets/mediumSkull.png');
+            this.load.image('pieton', 'assets/pieton.png');
+            this.load.image('eau', 'assets/water.png');
+
+            this.load.image('tiles', 'assets/tilemap.png');
+            this.load.tilemapTiledJSON('background', 'backgroundHabitation.json');
+        }
+
+        function create()
+        {
+            //Ajouter la carte
+            map = this.make.tilemap({ key: 'background' });
+            //utiliser name de tilesets
+            //calque 1 = habitation
+            //calque 2 = route
+            tiles = map.addTilesetImage('tilemap', 'tiles', 16, 16, 0, 1);
+            layer = map.createStaticLayer("Calque 1", tiles, 0, 0);
+            //detecter layer pour que le velo ne roule pas sur les habitations (et le trottoir)
+            layer.setCollisionByExclusion([-1]);
+            
+            //rajouter un autre layer
+            layer2 = map.createStaticLayer("Calque 2", tiles, 0, 0);
+
+            //Ajouter le velo avec physics pour velocity
+            velo = this.physics.add.image (120, 550, 'velo');
+            voiture = this.physics.add.image(500, 130, 'voiture');
+            voitureRouge = this.physics.add.image(700, 690, 'voitureRouge');
+            voitureRouge2 = this.physics.add.image(880, 180, 'voitureRouge');
+            pieton = this.physics.add.image(1100, 400, 'pieton');
+
+            //mes bouteilles d'eaux un peu partout dans la map
+            eau1 = this.physics.add.image(120, 350,'eau');
+            eau2 = this.physics.add.image(220, 120, 'eau');
+            eau3 = this.physics.add.image(1100, 120, 'eau');
+            eau4 = this.physics.add.image(1250, 470, 'eau');
+            eau5 = this.physics.add.image(70, 720, 'eau');
+            eau6 = this.physics.add.image(1250, 80, 'eau');
+            eau7 = this.physics.add.image(70, 550, 'eau');
+            eau8 = this.physics.add.image(905, 30, 'eau');
+            //deplacer la voiture rouge sur l'axe des X
+            voitureRouge.setVelocityX(Phaser.Math.Between(-150,-50));
+            voitureRouge2.setVelocityX(Phaser.Math.Between(-150,-50));
+            // Ajouter à la variable globale key le clavier
+            keys = this.input.keyboard.createCursorKeys();
+
+            // Initialiser le nombre de vie du velo
+            velo.nbLives = 3;
+ 
+            // setter par défaut le velo comme non invincible
+            velo.invincible = false;
+
+            score = 0;
+            scoreText = this.add.text(10,10, `score : ${score}`,{ fontSize: '40px', fill:'white'});
+
+            /*creer un groupe de bouteille d'eau à collecter
+            eaux = this.physics.add.group({
+                key: 'eau',
+                repeat: 5,
+                setXY: { x:12, y:0, stepX: 70}
+            });
+            eaux.children.iterate(function(child){
+                child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+            });
+            */            
+
+            //collider: collision entre le velo et la voiture rouge
+            this.physics.add.collider(velo, voitureRouge, detectVeloAndVoitureRouge, null, this);
+            this.physics.add.collider(velo, voitureRouge2, detectVeloAndVoitureRouge, null, this);
+
+            this.physics.add.collider(velo, voiture, detectVeloAndVoiture, null, this);
+            this.physics.add.collider(velo, pieton, detectVeloAndPieton, null, this);
+
+            //collider entre le velo et le layer1: habitation
+            this.physics.add.collider(velo, layer);
+
+            //overlap entre le velo et les différentes eaux pour collecter
+            //pas besoin de collider
+            this.physics.add.overlap(velo, eau1, collectEaux, null, this);
+
+            this.physics.add.overlap(velo, eau2, collectEaux, null, this);
+
+            this.physics.add.overlap(velo, eau3, collectEaux, null, this);
+            this.physics.add.overlap(velo, eau4, collectEaux, null, this);
+            this.physics.add.overlap(velo, eau5, collectEauxParking, null, this);
+            this.physics.add.overlap(velo, eau6, collectEaux, null, this);
+            this.physics.add.overlap(velo, eau7, collectEaux, null, this);
+            this.physics.add.overlap(velo, eau8, collectEaux, null, this);
+
+            salut = this.add.text(20, 420, 'Salut toi!', { fontFamily: '"Roboto Condensed"' });
+            salut1 = this.add.text(20, 440, 'Bienvenue en ville.', { fontFamily: '"Roboto Condensed"' });
+            salut2 =this.add.text(20, 460, 'Collecte les eaux,', { fontFamily: '"Roboto Condensed"' });
+            salut3 =this.add.text(20, 480, 'pour avoir des points.', { fontFamily: '"Roboto Condensed"' });
+            salut4 =this.add.text(20, 500, 'Evite les autos.', { fontFamily: '"Roboto Condensed"' });
+            salut5 =this.add.text(20, 520, 'Et vive le vélo!', { fontFamily: '"Roboto Condensed"' });
+        }
+
+        function update()
+        {
+            //déplacement velo
+            velo.setVelocity(0, 0);
+            if(keys.left.isDown){
+                velo.setVelocityX(-110);
+                salut.setVisible(false);
+                salut1.setVisible(false);
+                salut2.setVisible(false);
+                salut3.setVisible(false);
+                salut4.setVisible(false);
+                salut5.setVisible(false);
+            }
+            else if(keys.right.isDown){
+                velo.setVelocityX(110);
+            }
+            if(keys.up.isDown){
+                velo.setVelocityY(-110);
+            }
+            else if(keys.down.isDown){
+                velo.setVelocityY(110);
+            }
+
+             // Conditions pour que le velo ne sorte pas de l'écran 
+            if(velo.x < 20) velo.x = 20;
+            if(velo.y < 20) velo.y = 20;
+            if(velo.x > 1330) velo.x = 1330;
+            if(velo.y > 755) velo.y = 755; 
+
+
+        }
+
+
+        function detectVeloAndLayerHabitation(_velo, _layer){
+
+        }
+        function detectVeloAndPieton(_velo, _pieton){
+            _pieton.setImmovable(false);
+            alert('M\'enfin!! Pense un peu aux piétons stp, fais attention!');
+            //rendre le pieton immovable
+            
+        }
+        //fonction de collision entre le velo et la voiture rouge
+        function detectVeloAndVoitureRouge(_velo, _voitureRouge){
+
+            if(!_velo.invincible){
+                _velo.nbLives = 0;
+        // Générer la collision avec une image de tête de mort quand le velo est touché
+        let explosion = this.add.image(_velo.x, _velo.y, 'mort');
+        
+        _velo.setVisible(false);
+        
+        _voitureRouge.destroy();
+               // alert("Vous êtes mort!")
+            }
+        }
+
+        function detectVeloAndVoitureRouge(_velo, _voitureRouge2){
+
+            if(!_velo.invincible){
+                _velo.nbLives = 0;
+        // Générer la collision avec une image de tête de mort quand le velo est touché
+        let explosion = this.add.image(_velo.x, _velo.y, 'mort');
+        
+        _velo.setVisible(false);
+        
+        _voitureRouge2.destroy();
+               // alert("Vous êtes mort!")
+            }
+        }
+
+        //fonction de collision entre le velo et la voiture
+        function detectVeloAndVoiture(_velo, _voiture){
+
+            if(!_velo.invincible){
+                _velo.nbLives --;
+            
+                let boum = this.add.image(_velo.x, _velo.y, 'pneuMort');
+                //la voiture disparait au moment de la collision
+                _voiture.setVisible(false);
+               
+                alert('Fais attention la prochaine fois');
+            }
+        }
+
+        function collectEauxParking(velo, eau){
+            eau.disableBody(true, true);
+            score+=10;
+            scoreText.setText('Score :'+ score);
+            alert('Génial, voici le parking des vélo. La sortie est de l\'autre côté, tu as le choix entre 3 issues.');
+        }
+        
+        function collectEaux(velo, eau){
+            eau.disableBody(true, true);
+            score+=10;
+            scoreText.setText('Score :'+ score); 
+        }
+    </script>
+</body>
 </html>
